@@ -10,28 +10,40 @@ import Vapor
 final class SocketConnectionController {
     
     func handleMessage(ws: WebSocket, text: String) {
-        guard let socketData: SocketData = try? parseJSON(text: text) else {
+        guard let socketData: SocketData<String> = try? parseJSON(text: text) else {
             return
         }
 
         switch socketData.messageType {
         case .joinRoom:
-            joinRoom(clientID: socketData.clientID)
+            joinRoom(socketData: socketData, ws: ws)
             break
         case .createRoom:
-            createRoom(clientID: socketData.clientID)
+            createRoom(socketData: socketData, ws: ws)
             break
         default:
             break
         }
     }
     
-    private func joinRoom(clientID: String) {
-        
+    private func joinRoom(socketData: SocketData<String>, ws: WebSocket) {
+        let player = Player(id: socketData.clientID, socket: ws)
+        guard let roomID = socketData.data else {return}
+        RoomManager.shared.addPlayerToRoom(roomID: roomID, player: player)
     }
     
-    private func createRoom(clientID: String) {
+    private func createRoom(socketData: SocketData<String>, ws: WebSocket) {
+        let player = Player(id: socketData.clientID, socket: ws)
+        guard let roomID = socketData.data else {return}
+        let newRoom = Room(id: roomID, words: ["1","2"])
+        newRoom.players.append(player)
+        RoomManager.shared.addRoom(room: newRoom)
+    }
     
+    private func sendMessage<T>(ws: WebSocket, socketData: SocketData<T>) {
+        guard let data = try? JSONEncoder().encode(socketData) else {return}
+        guard let stringJSON = String(data: data, encoding: .utf8) else {return}
+        ws.send(stringJSON)
     }
     
     private func parseJSON<T>(text: String) throws -> T? where T:Decodable {
